@@ -2,6 +2,8 @@
 //
 const { parseArgs } = require("node:util");
 const fs = require("node:fs");
+const readline = require("node:readline");
+
 // Developer defines configuration for CLI flags.
 
 const options = {
@@ -16,6 +18,10 @@ const options = {
   status: {
     type: "string",
   },
+  ["duration-gt"]: {
+    type: "string",
+    short: "t",
+  },
 };
 
 // Scirpt parses terminal arguments.
@@ -29,7 +35,7 @@ if (!values.input) {
 }
 
 // Scirpt prints parsed object to terminal
-console.log(values);
+// console.log(values);
 
 // Scirpt creates read stream from input file.
 const readStream = fs.createReadStream(values.input);
@@ -40,4 +46,46 @@ const writeStream = values.output
   : process.stdout;
 
 // Scirpt connects pipe.
-readStream.pipe(writeStream);
+//readStream.pipe(writeStream);
+const rl = readline.createInterface({
+  input: readStream,
+  crlfDelay: Infinity,
+});
+
+// initializes counters.
+let totallines = 0;
+let matchedLines = 0;
+
+rl.on("line", (line) => {
+  totallines++;
+  try {
+    // parses string into object.
+    const logEntry = JSON.parse(line);
+    // checks status condition.
+    if (values.status && logEntry.status !== Number(values.status)) {
+      //stops execution for this line.
+      return;
+    }
+    // checks durationMS
+
+    // console.log(logEntry.durationMs);
+    if (
+      values["duration-gt"] &&
+      logEntry.durationMs <= Number(values["duration-gt"])
+    ) {
+      return;
+    }
+
+    matchedLines++;
+    writeStream.write(line + "\n");
+  } catch (error) {
+    // ignores broken JSON lines
+  }
+});
+
+// listens for end of file.
+rl.on("close", () => {
+  //prints statistics to stderr.
+  console.error(`Total read: ${totallines}. Matched: ${matchedLines}.`);
+  process.exit(0);
+});
